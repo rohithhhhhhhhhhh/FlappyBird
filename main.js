@@ -1,0 +1,326 @@
+import "./style.css";
+
+// Canvas and context
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game settings
+const CANVAS_WIDTH = 400;
+const CANVAS_HEIGHT = 600;
+canvas.width = CANVAS_WIDTH;
+canvas.height = CANVAS_HEIGHT;
+
+// Game states
+const GAME_STATES = {
+  START: 'start',
+  PLAYING: 'playing',
+  GAME_OVER: 'gameOver'
+};
+
+let gameState = GAME_STATES.START;
+
+// Load Allu Arjun image
+const alluArjunImage = new Image();
+alluArjunImage.src = '/allu-arjun.png';
+let imageLoaded = false;
+
+alluArjunImage.onload = () => {
+  imageLoaded = true;
+};
+
+// Load sound effects
+const flapSound = new Audio('/flap.mp3');
+const gameOverSound = new Audio('/gameover.mp3');
+
+// Player (Allu Arjun)
+const player = {
+  x: 100,
+  y: CANVAS_HEIGHT / 2,
+  width: 45,
+  height: 45,
+  velocity: 0,
+  gravity: 0.35,
+  jumpStrength: -8,
+  rotation: 0
+};
+
+// Pipes
+const pipes = [];
+const PIPE_WIDTH = 60;
+const PIPE_GAP = 180;
+const PIPE_SPEED = 2.5;
+let frameCount = 0;
+const PIPE_FREQUENCY = 90;
+
+// Score
+let score = 0;
+let passedPipes = new Set();
+
+// UI Elements
+const scoreElement = document.getElementById('score');
+const gameOverScreen = document.getElementById('gameOver');
+const startScreen = document.getElementById('startScreen');
+const finalScoreElement = document.getElementById('finalScore');
+
+// Draw Allu Arjun character using image
+function drawPlayer() {
+  if (!imageLoaded) {
+    // Draw a placeholder if image hasn't loaded yet
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+
+  // Rotation based on velocity
+  const maxRotation = Math.PI / 6;
+  player.rotation = Math.max(-maxRotation, Math.min(maxRotation, player.velocity * 0.05));
+  ctx.rotate(player.rotation);
+
+  // Draw the Allu Arjun image
+  ctx.drawImage(
+    alluArjunImage,
+    -player.width / 2,
+    -player.height / 2,
+    player.width,
+    player.height
+  );
+
+  ctx.restore();
+}
+
+// Create pipes
+function createPipe() {
+  const minHeight = 50;
+  const maxHeight = CANVAS_HEIGHT - PIPE_GAP - minHeight - 100;
+  const topHeight = Math.random() * (maxHeight - minHeight) + minHeight;
+
+  pipes.push({
+    x: CANVAS_WIDTH,
+    topHeight: topHeight,
+    bottomY: topHeight + PIPE_GAP,
+    scored: false
+  });
+}
+
+// Draw pipes (styled as green pipes)
+function drawPipes() {
+  pipes.forEach(pipe => {
+    // Top pipe
+    const topGradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + PIPE_WIDTH, 0);
+    topGradient.addColorStop(0, '#2ecc71');
+    topGradient.addColorStop(0.5, '#27ae60');
+    topGradient.addColorStop(1, '#229954');
+    ctx.fillStyle = topGradient;
+    ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.topHeight);
+
+    // Top pipe cap
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(pipe.x - 5, pipe.topHeight - 30, PIPE_WIDTH + 10, 30);
+
+    // Bottom pipe
+    const bottomGradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + PIPE_WIDTH, 0);
+    bottomGradient.addColorStop(0, '#2ecc71');
+    bottomGradient.addColorStop(0.5, '#27ae60');
+    bottomGradient.addColorStop(1, '#229954');
+    ctx.fillStyle = bottomGradient;
+    ctx.fillRect(pipe.x, pipe.bottomY, PIPE_WIDTH, CANVAS_HEIGHT - pipe.bottomY);
+
+    // Bottom pipe cap
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(pipe.x - 5, pipe.bottomY, PIPE_WIDTH + 10, 30);
+
+    // Add pipe border
+    ctx.strokeStyle = '#1e8449';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(pipe.x, 0, PIPE_WIDTH, pipe.topHeight);
+    ctx.strokeRect(pipe.x, pipe.bottomY, PIPE_WIDTH, CANVAS_HEIGHT - pipe.bottomY);
+  });
+}
+
+// Update game objects
+function update() {
+  if (gameState !== GAME_STATES.PLAYING) return;
+
+  // Update player
+  player.velocity += player.gravity;
+  player.y += player.velocity;
+
+  // Keep player in bounds
+  if (player.y + player.height > CANVAS_HEIGHT) {
+    player.y = CANVAS_HEIGHT - player.height;
+    gameOver();
+  }
+
+  if (player.y < 0) {
+    player.y = 0;
+    player.velocity = 0;
+  }
+
+  // Update pipes
+  frameCount++;
+  if (frameCount % PIPE_FREQUENCY === 0) {
+    createPipe();
+  }
+
+  pipes.forEach((pipe, index) => {
+    pipe.x -= PIPE_SPEED;
+
+    // Check collision
+    if (checkCollision(player, pipe)) {
+      gameOver();
+    }
+
+    // Update score
+    if (!pipe.scored && pipe.x + PIPE_WIDTH < player.x) {
+      pipe.scored = true;
+      score++;
+      scoreElement.textContent = `Score: ${score}`;
+    }
+
+    // Remove off-screen pipes
+    if (pipe.x + PIPE_WIDTH < 0) {
+      pipes.splice(index, 1);
+    }
+  });
+}
+
+// Check collision
+function checkCollision(player, pipe) {
+  // Check if player is in pipe's x range
+  if (player.x + player.width > pipe.x && player.x < pipe.x + PIPE_WIDTH) {
+    // Check if player hits top or bottom pipe
+    if (player.y < pipe.topHeight || player.y + player.height > pipe.bottomY) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Draw background
+function drawBackground() {
+  // Sky
+  const skyGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT * 0.7);
+  skyGradient.addColorStop(0, '#87CEEB');
+  skyGradient.addColorStop(1, '#B0E0E6');
+  ctx.fillStyle = skyGradient;
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT * 0.7);
+
+  // Ground
+  const groundGradient = ctx.createLinearGradient(0, CANVAS_HEIGHT * 0.7, 0, CANVAS_HEIGHT);
+  groundGradient.addColorStop(0, '#90EE90');
+  groundGradient.addColorStop(1, '#7CCD7C');
+  ctx.fillStyle = groundGradient;
+  ctx.fillRect(0, CANVAS_HEIGHT * 0.7, CANVAS_WIDTH, CANVAS_HEIGHT * 0.3);
+
+  // Add clouds
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  const cloudY = [80, 150, 100, 180];
+  const cloudX = [(frameCount * 0.2) % (CANVAS_WIDTH + 100), (frameCount * 0.15 + 200) % (CANVAS_WIDTH + 100), (frameCount * 0.25 + 100) % (CANVAS_WIDTH + 100), (frameCount * 0.18 + 300) % (CANVAS_WIDTH + 100)];
+
+  cloudX.forEach((x, i) => {
+    ctx.beginPath();
+    ctx.arc(x, cloudY[i], 20, 0, Math.PI * 2);
+    ctx.arc(x + 15, cloudY[i], 25, 0, Math.PI * 2);
+    ctx.arc(x + 35, cloudY[i], 20, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Draw everything
+function draw() {
+  drawBackground();
+  drawPipes();
+  drawPlayer();
+}
+
+// Game loop
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// Player jump
+function jump() {
+  if (gameState === GAME_STATES.START) {
+    startGame();
+  } else if (gameState === GAME_STATES.PLAYING) {
+    player.velocity = player.jumpStrength;
+    // Play flap sound
+    flapSound.currentTime = 0;
+    flapSound.play().catch(err => console.log('Audio play failed:', err));
+  } else if (gameState === GAME_STATES.GAME_OVER) {
+    resetGame();
+  }
+}
+
+// Start game
+function startGame() {
+  gameState = GAME_STATES.PLAYING;
+  startScreen.classList.add('hidden');
+  player.velocity = player.jumpStrength;
+  // Play flap sound on start
+  flapSound.currentTime = 0;
+  flapSound.play().catch(err => console.log('Audio play failed:', err));
+}
+
+// Game over
+function gameOver() {
+  if (gameState !== GAME_STATES.PLAYING) return;
+
+  gameState = GAME_STATES.GAME_OVER;
+  finalScoreElement.textContent = score;
+  gameOverScreen.classList.remove('hidden');
+
+  // Play game over sound (Allu Arjun laughing)
+  gameOverSound.currentTime = 0;
+  gameOverSound.play().catch(err => console.log('Audio play failed:', err));
+}
+
+// Reset game
+function resetGame() {
+  gameState = GAME_STATES.START;
+  player.y = CANVAS_HEIGHT / 2;
+  player.velocity = 0;
+  player.rotation = 0;
+  pipes.length = 0;
+  score = 0;
+  frameCount = 0;
+  scoreElement.textContent = 'Score: 0';
+  gameOverScreen.classList.add('hidden');
+  startScreen.classList.remove('hidden');
+}
+
+// Keyboard controls (space, up arrow, w)
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    e.preventDefault();
+    jump();
+  }
+});
+
+// Touch/click controls for mobile
+canvas.addEventListener('click', () => {
+  jump();
+});
+
+// Handle window resize
+window.addEventListener('resize', () => {
+  // Keep canvas size fixed for consistent gameplay
+  const container = document.getElementById('game-container');
+  const scale = Math.min(
+    window.innerWidth / CANVAS_WIDTH,
+    window.innerHeight / CANVAS_HEIGHT
+  ) * 0.9;
+
+  canvas.style.transform = `scale(${scale})`;
+});
+
+// Trigger initial resize
+window.dispatchEvent(new Event('resize'));
+
+// Start game loop
+gameLoop();
