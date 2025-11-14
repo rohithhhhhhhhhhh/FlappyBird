@@ -66,8 +66,8 @@ unlockAudioOnce();
 const player = {
   x: 100,
   y: CANVAS_HEIGHT / 2,
-  width: 35,
-  height: 35,
+  width: 30,
+  height: 30,
   velocity: 0,
   gravity: 0.35,
   jumpStrength: -8,
