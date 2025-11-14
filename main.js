@@ -1,5 +1,8 @@
 import "./style.css";
 
+// helper to build correct asset URLs for dev and production
+const asset = (p) => (import.meta.env?.BASE_URL ?? '/') + p;
+
 // Canvas and context
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -20,17 +23,44 @@ const GAME_STATES = {
 let gameState = GAME_STATES.START;
 
 // Load Allu Arjun image
+// helper usage: load Allu Arjun image and sounds with correct base path
 const alluArjunImage = new Image();
-alluArjunImage.src = '/allu-arjun.png';
+alluArjunImage.src = asset('allu-arjun.png');
 let imageLoaded = false;
 
 alluArjunImage.onload = () => {
   imageLoaded = true;
 };
 
-// Load sound effects
-const flapSound = new Audio('/flap.mp3');
-const gameOverSound = new Audio('/gameover.mp3');
+// Load sound effects using asset helper
+const flapSound = new Audio(asset('flap.mp3'));
+flapSound.preload = 'auto';
+
+const gameOverSound = new Audio(asset('gameover.mp3'));
+gameOverSound.preload = 'auto';
+
+
+
+// Unlock audio on first user interaction (fixes autoplay issues)
+function unlockAudioOnce() {
+  function unlock() {
+    flapSound.play().catch(()=>{});
+    flapSound.pause();
+    flapSound.currentTime = 0;
+
+    gameOverSound.play().catch(()=>{});
+    gameOverSound.pause();
+    gameOverSound.currentTime = 0;
+
+    document.removeEventListener('keydown', unlock);
+    document.removeEventListener('click', unlock);
+  }
+
+  document.addEventListener('keydown', unlock, { once: true });
+  document.addEventListener('click', unlock, { once: true });
+}
+unlockAudioOnce();
+
 
 // Player (Allu Arjun)
 const player = {
